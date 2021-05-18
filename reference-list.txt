@@ -1,5 +1,12 @@
-youtube :
+youtube (main) :
   https://www.youtube.com/watch?v=5qtC-tsQ-wE&ab_channel=PythonEngineer
+  
+youtube (sub1) :
+  https://www.youtube.com/watch?v=lc2KvFbbfAQ&ab_channel=PrettyPrinted
+  https://github.com/PrettyPrinted/youtube_video_code/blob/master/2019/07/27/Django%20Example%20App%20-%20YouTube%20Search%20With%20YouTube%20Data%20API/django_youtube_search/youtube_search/search/views.py
+
+youtube (sub2) :
+  https://www.youtube.com/watch?v=b_jOJNUD350&ab_channel=IndianPythonista
   
 google :
   https://developers.google.com/youtube/v3/quickstart/python
