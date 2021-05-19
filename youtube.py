@@ -2,7 +2,7 @@
 from googleapiclient.discovery import build #https://developers.google.com/docs/api/quickstart/python
 from datetime import datetime
 
-api_key = "AIzaSyAM1a_XGQnnLDyJ7oYmhJV8mBDRY7MDtxk"
+#api_key = ""
 youtube = build('youtube','v3',developerKey=api_key)
 type(youtube)
 
