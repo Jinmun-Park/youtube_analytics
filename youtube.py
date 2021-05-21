@@ -40,7 +40,7 @@ class youtube:
 youtube = youtube("AIzaSyAM1a_XGQnnLDyJ7oYmhJV8mBDRY7MDtxk")
 youtube.dailytrend(2021, 5, 19, n_max=10)
 
-api_key = "AIzaSyAM1a_XGQnnLDyJ7oYmhJV8mBDRY7MDtxk"
+#api_key = ""
 youtube = build('youtube','v3',developerKey=api_key)
 
 # API Search list : https://developers.google.com/youtube/v3/docs/search/list
