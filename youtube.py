@@ -6,8 +6,10 @@ google_api_searchlist : https://developers.google.com/youtube/v3/docs/search/lis
 # pip install google-api-python-client
 from googleapiclient.discovery import build
 from datetime import datetime
-#import pandas as pd
+import pandas as pd
 from matplotlib import pyplot as plt
+import matplotlib.gridspec as gridspec
+import seaborn as sns
 import colored
 
 # API Search list :
@@ -148,53 +150,112 @@ class youtube:
 class analysis:
     def __init__(self, scaler):
         self.scaler = int(scaler)
+    #def cursor_chart(self):
 
-    def chart(self):
-        x = [] #date
-        a = [] #view
-        b = [] #like
-        c = [] #dislike
-        d = [] #comment
+    def allchart(self):
+        # All plots list
+        date = []
+        view = []
+        like = []
+        dislike = []
+        comment = []
+        #  ratio plots list
+        fbtotal = [] #like+dislike
+        fbratio = [] #fbtotal/view
+        likeratio = [] #like/fbtotal
+        dislikeratio = [] #dislike/fbtotal
 
         for i in range(0, len(summary)):
-            date = summary[i]['publishedAt']
-            x.append(date)
-            view = int(summary[i]['statistics']['viewCount'])/self.scaler
-            a.append(view)
-            like = int(summary[i]['statistics']['likeCount'])/self.scaler
-            b.append(like)
-            dislike = int(summary[i]['statistics']['dislikeCount'])/self.scaler
-            c.append(dislike)
-            comment = int(summary[i]['statistics']['commentCount'])/self.scaler
-            d.append(comment)
+            # All plots
+            x = summary[i]['publishedAt']
+            date.append(x)
+            a = int(summary[i]['statistics']['viewCount'])/self.scaler
+            view.append(a)
+            b = int(summary[i]['statistics']['likeCount'])/self.scaler
+            like.append(b)
+            c = int(summary[i]['statistics']['dislikeCount'])/self.scaler
+            dislike.append(c)
+            d = int(summary[i]['statistics']['commentCount'])/self.scaler
+            comment.append(d)
 
-        f, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(20, 14))
-        ax1.plot(x, a, color='blue', label='ViewCount')
-        ax1.set_title("ViewCount", fontsize=10)
+        for i in range(0, len(summary)):
+            # Ratio plots
+            e = like[i]+dislike[i] #like+dislike
+            fbtotal.append(e)
+
+        for i in range(0, len(summary)):
+            f = fbtotal[i]/view[i] #fbtotal/view
+            fbratio.append(f)
+            g =  like[i]/fbtotal[i] #like/fbtotal
+            likeratio.append(g)
+            h = dislike[i]/fbtotal[i] #dislike/fbtotal
+            dislikeratio.append(h)
+
+        # Plot_001 : All plots
+        sns.set()
+        f, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(25, 14), dpi=80)
+        ax1.plot(date, view, label='ViewCount')
+        ax1.set_title("ViewCount", fontsize=15)
         ax1.set_ylabel('ViewCount')
         ax1.grid(True)
         ax1.tick_params(axis='x', rotation=45, labelsize=8)
 
-        ax2.plot(x, b, color='red', label='LikeCount')
-        ax2.set_title("LikeCount", fontsize=10)
+        ax2.plot(date, like, color='red', label='LikeCount')
+        ax2.set_title("LikeCount", fontsize=15)
         ax2.set_ylabel('LikeCount')
         ax2.grid(True)
         ax2.tick_params(axis='x', rotation=45, labelsize=8)
 
-        ax3.plot(x, c, color='cyan', label='DislikeCount')
-        ax3.set_title("Dislike Count", fontsize=10)
+        ax3.plot(date, dislike, color='blue', label='DislikeCount')
+        ax3.set_title("Dislike Count", fontsize=15)
         ax3.set_ylabel('Dislike Count')
         ax3.grid(True)
         ax3.tick_params(axis='x', rotation=45, labelsize=8)
 
-        ax4.plot(x, d, color='black', label='CommentCount')
-        ax4.set_title("Comment Count", fontsize=10)
+        ax4.plot(date, comment, color='black', label='CommentCount')
+        ax4.set_title("Comment Count", fontsize=15)
         ax4.set_ylabel('Comment Count')
         ax4.grid(True)
         ax4.tick_params(axis='x', rotation=45, labelsize=8)
 
         f.subplots_adjust(wspace=0.2, hspace=0.5)
-        plt.show()
+        plt.show(block=True)
+
+        #Plot002 : ratio plots
+        f = plt.figure()
+        gs = gridspec.GridSpec(2, 2)
+
+        ax1 = f.add_subplot(gs[0, 0])
+        ax2 = f.add_subplot(gs[0, 1])
+        ax3 = f.add_subplot(gs[1, :])
+
+        ax1.plot(date, dislikeratio, color='red')
+        ax1.set_title("Dislike / Total Like&Dis", fontsize=10)
+        ax1.set_ylabel('Dislike ratio')
+        ax1.grid(True)
+        ax1.tick_params(axis='x', rotation=45, labelsize=7)
+        ax1.grid(which='major', linestyle='--')
+        ax1.grid(which='minor', linestyle=':')
+
+        ax2.plot(date, likeratio, color='black')
+        ax2.set_title("Like / Total Like&Dis", fontsize=10)
+        ax2.set_ylabel('Like ratio')
+        ax2.grid(True)
+        ax2.tick_params(axis='x', rotation=45, labelsize=7)
+        ax2.grid(which='major', linestyle='--')
+        ax2.grid(which='minor', linestyle=':')
+
+        ax3.plot(date, fbratio)
+        ax3.set_title("(Like+Dislike) / Total View", fontsize=10)
+        ax3.set_ylabel('like&dis ratio')
+        ax3.grid(True)
+        ax3.tick_params(axis='x', rotation=45, labelsize=7)
+        ax3.grid(which='major', linestyle='--')
+        ax3.grid(which='minor', linestyle=':')
+
+        f.subplots_adjust(wspace=0.2, hspace=0.5)
+        plt.show(block=True)
+
 
 ################################################################################################################################################################################
 youtube = youtube("AIzaSyAM1a_XGQnnLDyJ7oYmhJV8mBDRY7MDtxk")
@@ -203,8 +264,48 @@ popular_list = youtube.popular_video(n_max=20)
 summary = youtube.get_channel_stats('UCPKNKldggioffXPkSmjs5lQ', sort='date')
 
 analysis = analysis(scaler=1)
-analysis.chart()
+analysis.allchart()
 
 youtube = build('youtube', 'v3', developerKey="") #AIzaSyAM1a_XGQnnLDyJ7oYmhJV8mBDRY7MDtxk
 ################################################################################################################################################################################
-######## TEST PLACE : Have to change the
+######## TEST PLACE :
+
+date = []
+view = []
+like = []
+dislike = []
+comment = []
+#  ratio plots list
+fbtotal = []  # like+dislike
+fbratio = []  # fbtotal/view
+likeratio = []  # like/fbtotal
+dislikeratio = []  # dislike/fbtotal
+
+for i in range(0, len(summary)):
+    # All plots
+    x = summary[i]['publishedAt']
+    date.append(x)
+    a = int(summary[i]['statistics']['viewCount'])
+    view.append(a)
+    b = int(summary[i]['statistics']['likeCount'])
+    like.append(b)
+    c = int(summary[i]['statistics']['dislikeCount'])
+    dislike.append(c)
+    d = int(summary[i]['statistics']['commentCount'])
+    comment.append(d)
+
+for i in range(0, len(summary)):
+    # Ratio plots
+    e = like[i] + dislike[i]  # like+dislike
+    fbtotal.append(e)
+
+for i in range(0, len(summary)):
+    f = fbtotal[i] / view[i]  # fbtotal/view
+    fbratio.append(f)
+    g = like[i] / fbtotal[i]  # like/fbtotal
+    likeratio.append(g)
+    h = dislike[i] / fbtotal[i]  # dislike/fbtotal
+    dislikeratio.append(h)
+
+
+
