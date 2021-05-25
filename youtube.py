@@ -4,13 +4,18 @@ relevanceLanguage : https://www.iso.org/obp/ui/#search
 google_api_searchlist : https://developers.google.com/youtube/v3/docs/search/list
 '''
 # pip install google-api-python-client
-from googleapiclient.discovery import build
+from googleapiclient.discovery import build #API
 from datetime import datetime
 import pandas as pd
+import numpy as np
 from matplotlib import pyplot as plt
-import matplotlib.gridspec as gridspec
-import seaborn as sns
+import matplotlib as mpl # Seasonal plot
+import matplotlib.gridspec as gridspec #Splitplot
+import seaborn as sns #Graph Visualization
 import colored
+from sklearn.decomposition import PCA #Anomaly
+from sklearn.preprocessing import StandardScaler #Anomaly
+from sklearn.ensemble import IsolationForest #Anomaly
 
 # API Search list :
 class youtube:
@@ -147,6 +152,7 @@ class youtube:
             summary = sorted(summary, key=lambda x: x['publishedAt'], reverse=True)
         return summary
 
+# Analysis using selected channelID
 class analysis:
     def __init__(self, scaler):
         self.scaler = int(scaler)
@@ -154,10 +160,15 @@ class analysis:
 
     def allchart(self):
         # All plots list
+        global date
         date = []
+        global view
         view = []
+        global like
         like = []
+        global dislike
         dislike = []
+        global comment
         comment = []
         #  ratio plots list
         fbtotal = [] #like+dislike
@@ -200,13 +211,13 @@ class analysis:
         ax1.grid(True)
         ax1.tick_params(axis='x', rotation=45, labelsize=8)
 
-        ax2.plot(date, like, color='red', label='LikeCount')
+        ax2.plot(date, like, color='blue', label='LikeCount')
         ax2.set_title("LikeCount", fontsize=15)
         ax2.set_ylabel('LikeCount')
         ax2.grid(True)
         ax2.tick_params(axis='x', rotation=45, labelsize=8)
 
-        ax3.plot(date, dislike, color='blue', label='DislikeCount')
+        ax3.plot(date, dislike, color='red', label='DislikeCount')
         ax3.set_title("Dislike Count", fontsize=15)
         ax3.set_ylabel('Dislike Count')
         ax3.grid(True)
@@ -219,7 +230,8 @@ class analysis:
         ax4.tick_params(axis='x', rotation=45, labelsize=8)
 
         f.subplots_adjust(wspace=0.2, hspace=0.5)
-        plt.show(block=True)
+        f.suptitle('All view plots', fontsize=20)
+        plt.show()
 
         #Plot002 : ratio plots
         f = plt.figure()
@@ -237,7 +249,7 @@ class analysis:
         ax1.grid(which='major', linestyle='--')
         ax1.grid(which='minor', linestyle=':')
 
-        ax2.plot(date, likeratio, color='black')
+        ax2.plot(date, likeratio, color='blue')
         ax2.set_title("Like / Total Like&Dis", fontsize=10)
         ax2.set_ylabel('Like ratio')
         ax2.grid(True)
@@ -254,58 +266,151 @@ class analysis:
         ax3.grid(which='minor', linestyle=':')
 
         f.subplots_adjust(wspace=0.2, hspace=0.5)
-        plt.show(block=True)
+        f.suptitle('All ratio plots')
+        plt.show()
 
+    def seasonal_plot(self):
+        year = []
+        month = []
+        for i in range(0, len(date)):
+            a = date[i].year
+            year.append(a)
+            b = date[i].month
+            month.append(b)
+
+        df = pd.DataFrame({'year': year, 'month': month, 'value': view})
+        np.random.seed(100)
+        mycolors = np.random.choice(list(mpl.colors.XKCD_COLORS.keys()), len(year), replace=False)
+
+        plt.figure(figsize=(16, 12), dpi=80)
+        for i, y in enumerate(year):
+            if i > 0:
+                plt.plot('month', 'value', data=df.loc[df.year == y, :], color=mycolors[i], label=y)
+                plt.text(df.loc[df.year == y, :].shape[0] - .9, df.loc[df.year == y, 'value'][-1:].values[0], y,
+                         fontsize=12, color=mycolors[i])
+
+        plt.gca().set(ylabel='$view$', xlabel='$Month$')
+        plt.yticks(fontsize=12, alpha=.7)
+        plt.title("Seasonal Plot of Drug Sales Time Series", fontsize=20)
+        plt.show()
+
+    def anomaly_plot(self, type, select):
+        #type = 2d, 3d, all
+        #select = view, like, dislike, comment
+        df = pd.DataFrame({'date': date, 'view': view, 'like': like, 'dislike': dislike, 'comment': comment})
+        data = df[['view', 'like', 'dislike', 'comment']]
+
+        # IsolationForest Modelling
+        clf = IsolationForest(n_estimators=100, max_samples='auto',
+                              max_features=1.0, bootstrap=False, n_jobs=-1, random_state=42, verbose=0)
+        clf.fit(data)
+        pred = clf.predict(data)
+        df['anomaly'] = pred
+
+        # Outlier print
+        outliers = df.loc[df['anomaly'] == -1]
+        outlier_index = list(outliers.index)
+        print(df['anomaly'].value_counts())
+
+        if type == '2d':
+            # 2D Plot
+            pca = PCA(2)
+            pca.fit(data)
+            res = pd.DataFrame(pca.transform(data))
+            Z = np.array(res)
+            figsize = (12, 7)
+            plt.figure(figsize=figsize)
+            plt.title("IsolationForest")
+            plt.contourf(Z, cmap=plt.cm.Blues_r)
+
+            b1 = plt.scatter(res[0], res[1], c='blue',
+                             s=40, label="normal points")
+
+            b1 = plt.scatter(res.iloc[outlier_index, 0], res.iloc[outlier_index, 1], c='red',
+                             s=40, edgecolor="red", label="predicted outliers")
+            plt.legend(loc="upper right")
+            plt.title("2D highlighting anomalies")
+            plt.show(block=True)
+
+        elif type == '3d':
+            # 3D Plot
+            pca = PCA(n_components=3)
+            scaler = StandardScaler()
+            X = scaler.fit_transform(data)
+            X_reduce = pca.fit_transform(X)
+
+            fig = plt.figure()
+            ax = fig.add_subplot(111, projection='3d')
+            ax.set_zlabel("x_composite_3")
+            ax.scatter(X_reduce[:, 0], X_reduce[:, 1], zs=X_reduce[:, 2], s=4, lw=1, label="inliers", c="green")
+            ax.scatter(X_reduce[outlier_index, 0], X_reduce[outlier_index, 1], X_reduce[outlier_index, 2],
+                       lw=2, s=60, marker="x", c="red", label="outliers")
+            ax.legend()
+            plt.title("3D highlighting anomalies")
+            plt.show(block=True)
+        else:
+            # 2D Plot
+            pca = PCA(2)
+            pca.fit(data)
+            res = pd.DataFrame(pca.transform(data))
+            Z = np.array(res)
+            figsize = (12, 7)
+            plt.figure(figsize=figsize)
+            plt.title("IsolationForest")
+            plt.contourf(Z, cmap=plt.cm.Blues_r)
+
+            b1 = plt.scatter(res[0], res[1], c='blue',
+                             s=40, label="normal points")
+
+            b1 = plt.scatter(res.iloc[outlier_index, 0], res.iloc[outlier_index, 1], c='red',
+                             s=40, edgecolor="red", label="predicted outliers")
+            plt.legend(loc="upper right")
+            plt.title("2D highlighting anomalies")
+            plt.show(block=True)
+
+            # 3D Plot
+            pca = PCA(n_components=3)
+            scaler = StandardScaler()
+            X = scaler.fit_transform(data)
+            X_reduce = pca.fit_transform(X)
+
+            fig = plt.figure()
+            ax = fig.add_subplot(111, projection='3d')
+            ax.set_zlabel("x_composite_3")
+            ax.scatter(X_reduce[:, 0], X_reduce[:, 1], zs=X_reduce[:, 2], s=4, lw=1, label="inliers", c="green")
+            ax.scatter(X_reduce[outlier_index, 0], X_reduce[outlier_index, 1], X_reduce[outlier_index, 2],
+                       lw=2, s=60, marker="x", c="red", label="outliers")
+            ax.legend()
+            plt.title("3D highlighting anomalies")
+            plt.show(block=True)
+
+        # Plot anomaly
+        fig, ax = plt.subplots(figsize=(10, 6))
+        a = df.loc[df['anomaly'] == -1, ['date', select]]  # anomaly
+        ax.plot(df['date'], df[select], color='blue', label=select)
+        ax.scatter(a['date'], a[select], color='red', label='Anomaly')
+        plt.legend()
+        plt.title(select + " Count")
+        plt.show(block=True)
 
 ################################################################################################################################################################################
 youtube = youtube("AIzaSyAM1a_XGQnnLDyJ7oYmhJV8mBDRY7MDtxk")
 trendvideo_list = youtube.trend_video(2021, 5, 19, after_day=7, n_max=10)
 popular_list = youtube.popular_video(n_max=20)
-summary = youtube.get_channel_stats('UCPKNKldggioffXPkSmjs5lQ', sort='date')
+summary = youtube.get_channel_stats('UCx6jsZ02B4K3SECUrkgPyzg', sort='date')
 
 analysis = analysis(scaler=1)
 analysis.allchart()
+analysis.seasonal_plot()
+analysis.anomaly_plot(type='all', select='comment') #
 
 youtube = build('youtube', 'v3', developerKey="") #AIzaSyAM1a_XGQnnLDyJ7oYmhJV8mBDRY7MDtxk
 ################################################################################################################################################################################
 ######## TEST PLACE :
 
-date = []
-view = []
-like = []
-dislike = []
-comment = []
-#  ratio plots list
-fbtotal = []  # like+dislike
-fbratio = []  # fbtotal/view
-likeratio = []  # like/fbtotal
-dislikeratio = []  # dislike/fbtotal
+# anomaly detection
+# https://towardsdatascience.com/time-series-of-price-anomaly-detection-13586cd5ff46
+# https://neptune.ai/blog/anomaly-detection-in-time-series#:~:text=What%20are%20anomalies%2Foutliers%20and,generated%20by%20a%20different%20mechanism.%E2%80%9D
 
-for i in range(0, len(summary)):
-    # All plots
-    x = summary[i]['publishedAt']
-    date.append(x)
-    a = int(summary[i]['statistics']['viewCount'])
-    view.append(a)
-    b = int(summary[i]['statistics']['likeCount'])
-    like.append(b)
-    c = int(summary[i]['statistics']['dislikeCount'])
-    dislike.append(c)
-    d = int(summary[i]['statistics']['commentCount'])
-    comment.append(d)
-
-for i in range(0, len(summary)):
-    # Ratio plots
-    e = like[i] + dislike[i]  # like+dislike
-    fbtotal.append(e)
-
-for i in range(0, len(summary)):
-    f = fbtotal[i] / view[i]  # fbtotal/view
-    fbratio.append(f)
-    g = like[i] / fbtotal[i]  # like/fbtotal
-    likeratio.append(g)
-    h = dislike[i] / fbtotal[i]  # dislike/fbtotal
-    dislikeratio.append(h)
-
-
-
+# add trend line
+# https://stackoverflow.com/questions/26447191/how-to-add-trendline-in-python-matplotlib-dot-scatter-graphs
