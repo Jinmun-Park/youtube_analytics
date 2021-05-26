@@ -150,16 +150,16 @@ class youtube:
             summary = sorted(summary, key=lambda x: int(x['statistics']['commentCount']), reverse=True)
         else:
             summary = sorted(summary, key=lambda x: x['publishedAt'], reverse=True)
+
         return summary
 
 # Analysis using selected channelID
 class analysis:
     def __init__(self, scaler):
         self.scaler = int(scaler)
-    #def cursor_chart(self):
 
-    def allchart(self):
-        # All plots list
+    def setup(self):
+        #  general plots list
         global date
         date = []
         global view
@@ -170,37 +170,45 @@ class analysis:
         dislike = []
         global comment
         comment = []
+        global title
+        title = []
         #  ratio plots list
-        fbtotal = [] #like+dislike
-        fbratio = [] #fbtotal/view
-        likeratio = [] #like/fbtotal
-        dislikeratio = [] #dislike/fbtotal
+        fbtotal = []  # like+dislike
+        fbratio = []  # fbtotal/view
+        likeratio = []  # like/fbtotal
+        dislikeratio = []  # dislike/fbtotal
 
         for i in range(0, len(summary)):
             # All plots
             x = summary[i]['publishedAt']
             date.append(x)
-            a = int(summary[i]['statistics']['viewCount'])/self.scaler
+            a = int(summary[i]['statistics']['viewCount']) / self.scaler
             view.append(a)
-            b = int(summary[i]['statistics']['likeCount'])/self.scaler
+            b = int(summary[i]['statistics']['likeCount']) / self.scaler
             like.append(b)
-            c = int(summary[i]['statistics']['dislikeCount'])/self.scaler
+            c = int(summary[i]['statistics']['dislikeCount']) / self.scaler
             dislike.append(c)
-            d = int(summary[i]['statistics']['commentCount'])/self.scaler
+            d = int(summary[i]['statistics']['commentCount']) / self.scaler
             comment.append(d)
+            extra = str(summary[i]['title'])
+            title.append(extra)
 
         for i in range(0, len(summary)):
             # Ratio plots
-            e = like[i]+dislike[i] #like+dislike
+            e = like[i] + dislike[i]  # like+dislike
             fbtotal.append(e)
 
         for i in range(0, len(summary)):
-            f = fbtotal[i]/view[i] #fbtotal/view
+            f = fbtotal[i] / view[i]  # fbtotal/view
             fbratio.append(f)
-            g =  like[i]/fbtotal[i] #like/fbtotal
+            g = like[i] / fbtotal[i]  # like/fbtotal
             likeratio.append(g)
-            h = dislike[i]/fbtotal[i] #dislike/fbtotal
+            h = dislike[i] / fbtotal[i]  # dislike/fbtotal
             dislikeratio.append(h)
+
+        return fbtotal, fbratio, likeratio, dislikeratio
+
+    def allchart(self):
 
         # Plot_001 : All plots
         sns.set()
@@ -297,20 +305,20 @@ class analysis:
     def anomaly_plot(self, type, select):
         #type = 2d, 3d, all
         #select = view, like, dislike, comment
-        df = pd.DataFrame({'date': date, 'view': view, 'like': like, 'dislike': dislike, 'comment': comment})
-        data = df[['view', 'like', 'dislike', 'comment']]
+        anomaly_df = pd.DataFrame({'date': date, 'title': title,'view': view, 'like': like, 'dislike': dislike, 'comment': comment})
+        data = anomaly_df[['view', 'like', 'dislike', 'comment']]
 
         # IsolationForest Modelling
         clf = IsolationForest(n_estimators=100, max_samples='auto',
                               max_features=1.0, bootstrap=False, n_jobs=-1, random_state=42, verbose=0)
         clf.fit(data)
         pred = clf.predict(data)
-        df['anomaly'] = pred
+        anomaly_df['anomaly'] = pred
 
         # Outlier print
-        outliers = df.loc[df['anomaly'] == -1]
+        outliers = anomaly_df.loc[anomaly_df['anomaly'] == -1]
         outlier_index = list(outliers.index)
-        print(df['anomaly'].value_counts())
+        print(anomaly_df['anomaly'].value_counts())
 
         if type == '2d':
             # 2D Plot
@@ -386,31 +394,89 @@ class analysis:
 
         # Plot anomaly
         fig, ax = plt.subplots(figsize=(10, 6))
-        a = df.loc[df['anomaly'] == -1, ['date', select]]  # anomaly
-        ax.plot(df['date'], df[select], color='blue', label=select)
+        a = anomaly_df.loc[anomaly_df['anomaly'] == -1, ['date', select]]  # anomaly
+        ax.plot(anomaly_df['date'], anomaly_df[select], color='blue', label=select)
         ax.scatter(a['date'], a[select], color='red', label='Anomaly')
         plt.legend()
         plt.title(select + " Count")
         plt.show(block=True)
 
+        return anomaly_df
 ################################################################################################################################################################################
+######## VIDEO LIST :
 youtube = youtube("AIzaSyAM1a_XGQnnLDyJ7oYmhJV8mBDRY7MDtxk")
 trendvideo_list = youtube.trend_video(2021, 5, 19, after_day=7, n_max=10)
 popular_list = youtube.popular_video(n_max=20)
-summary = youtube.get_channel_stats('UCx6jsZ02B4K3SECUrkgPyzg', sort='date')
 
+######## CHANNEL ANALYSIS :
+summary = youtube.get_channel_stats('UCx6jsZ02B4K3SECUrkgPyzg', sort='date')
 analysis = analysis(scaler=1)
+fbtotal, fbratio, likeratio, dislikeratio = analysis.setup()
 analysis.allchart()
 analysis.seasonal_plot()
-analysis.anomaly_plot(type='all', select='comment') #
+anomaly_df = analysis.anomaly_plot(type='all', select='comment') #
 
-youtube = build('youtube', 'v3', developerKey="") #AIzaSyAM1a_XGQnnLDyJ7oYmhJV8mBDRY7MDtxk
 ################################################################################################################################################################################
 ######## TEST PLACE :
-
+youtube = build('youtube', 'v3', developerKey="AIzaSyAM1a_XGQnnLDyJ7oYmhJV8mBDRY7MDtxk")
+channel_id = 'UCx6jsZ02B4K3SECUrkgPyzg'
 # anomaly detection
 # https://towardsdatascience.com/time-series-of-price-anomaly-detection-13586cd5ff46
 # https://neptune.ai/blog/anomaly-detection-in-time-series#:~:text=What%20are%20anomalies%2Foutliers%20and,generated%20by%20a%20different%20mechanism.%E2%80%9D
 
 # add trend line
 # https://stackoverflow.com/questions/26447191/how-to-add-trendline-in-python-matplotlib-dot-scatter-graphs
+
+anomaly_only = anomaly_df.loc[anomaly_df['anomaly'] == -1]
+
+f = plt.figure()
+gs = gridspec.GridSpec(2, 2)
+
+ax1 = f.add_subplot(gs[0, 0])
+ax2 = f.add_subplot(gs[0, 1])
+ax3 = f.add_subplot(gs[1, :])
+
+ax1.plot(anomaly_only['date'], anomaly_only['dislike'], color='red')
+ax1.set_title("Dislike from anomaly selected", fontsize=10)
+ax1.set_ylabel('Dislike Count')
+ax1.grid(True)
+ax1.tick_params(axis='x', rotation=45, labelsize=7)
+ax1.grid(which='major', linestyle='--')
+ax1.grid(which='minor', linestyle=':')
+
+ax2.plot(anomaly_only['date'], anomaly_only['like'], color='blue')
+ax2.set_title("Like from anomaly selected", fontsize=10)
+ax2.set_ylabel('Like Count')
+ax2.grid(True)
+ax2.tick_params(axis='x', rotation=45, labelsize=7)
+ax2.grid(which='major', linestyle='--')
+ax2.grid(which='minor', linestyle=':')
+
+ax3.plot(anomaly_only['date'], anomaly_only['view'])
+ax3.set_title("View from anomaly selected", fontsize=10)
+ax3.set_ylabel('View Count')
+ax3.grid(True)
+ax3.tick_params(axis='x', rotation=45, labelsize=7)
+ax3.grid(which='major', linestyle='--')
+ax3.grid(which='minor', linestyle=':')
+
+f.subplots_adjust(wspace=0.2, hspace=0.5)
+f.suptitle('All Plots in anomaly selected')
+
+###############
+plt.figure(figsize=(12,5))
+plt.xlabel('Like & Dislike in anomaly date')
+
+''':type
+df = df.set_index(pd.to_datetime(df.date), drop=True)
+df.bitcoin.plot(grid=True, label="bitcoin", legend=True)
+df.tether.plot(secondary_y=True, label="tether", legend=True)
+'''
+anomaly_only.plot(anomaly_only['date'], anomaly_only['like'], color='blue', grid=True, label='Count')
+ax2 = anomaly_only.plot(anomaly_only['date'], anomaly_only['dislike'], color='red', grid=True, secondary_y=True, label='Sum')
+
+h1, l1 = ax1.get_legend_handles_labels()
+h2, l2 = ax2.get_legend_handles_labels()
+
+plt.legend(h1+h2, l1+l2, loc=2)
+plt.show()
