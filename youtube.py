@@ -278,6 +278,7 @@ class analysis:
         plt.show()
 
     def seasonal_plot(self):
+        sns.set()
         year = []
         month = []
         for i in range(0, len(date)):
@@ -302,9 +303,11 @@ class analysis:
         plt.title("Seasonal Plot of Drug Sales Time Series", fontsize=20)
         plt.show()
 
-    def anomaly_plot(self, type, select):
+    def anomaly_plot(self, n_anomaly, type):
+        #n_anomaly = 1, 2
         #type = 2d, 3d, all
         #select = view, like, dislike, comment
+        sns.set()
         anomaly_df = pd.DataFrame({'date': date, 'title': title,'view': view, 'like': like, 'dislike': dislike, 'comment': comment})
         data = anomaly_df[['view', 'like', 'dislike', 'comment']]
 
@@ -318,6 +321,7 @@ class analysis:
         # Outlier print
         outliers = anomaly_df.loc[anomaly_df['anomaly'] == -1]
         outlier_index = list(outliers.index)
+        print("First anomaly selected values :")
         print(anomaly_df['anomaly'].value_counts())
 
         if type == '2d':
@@ -394,14 +398,88 @@ class analysis:
 
         # Plot anomaly
         fig, ax = plt.subplots(figsize=(10, 6))
-        a = anomaly_df.loc[anomaly_df['anomaly'] == -1, ['date', select]]  # anomaly
-        ax.plot(anomaly_df['date'], anomaly_df[select], color='blue', label=select)
-        ax.scatter(a['date'], a[select], color='red', label='Anomaly')
+        a = anomaly_df.loc[anomaly_df['anomaly'] == -1, ['date', 'view']]  # anomaly
+        ax.plot(anomaly_df['date'], anomaly_df['view'], color='blue', label='view')
+        ax.scatter(a['date'], a['view'], color='red', label='Anomaly')
         plt.legend()
-        plt.title(select + " Count")
+        plt.title("First anomaly selected view counts")
         plt.show(block=True)
 
-        return anomaly_df
+        if n_anomaly == 1:
+            print("You selected '1' in no.of anomaly running.")
+            anomaly_only = anomaly_df.loc[anomaly_df['anomaly'] == -1]
+        elif n_anomaly == 2:
+            print("You selected '2' in no.of anomaly running.")
+            anomaly_only = anomaly_df.loc[anomaly_df['anomaly'] == -1]
+            anomaly_only = anomaly_only.drop('anomaly', axis=1)  # Remove first anomaly selected
+            del data
+            data = anomaly_only[['view', 'like', 'dislike']]
+            clf = IsolationForest(n_estimators=100, max_samples='auto',
+                                  max_features=1.0, bootstrap=False, n_jobs=-1, random_state=42, verbose=0)
+            clf.fit(data)
+            pred = clf.predict(data)
+            anomaly_only['anomaly'] = pred  # Add second anomaly selected
+
+            outliers = anomaly_only.loc[anomaly_only['anomaly'] == -1]
+            outlier_index = list(outliers.index)
+            print("Second anomaly selected values :")
+            print(anomaly_only['anomaly'].value_counts())
+
+            fig, ax = plt.subplots(figsize=(10, 6))
+            a = anomaly_only.loc[anomaly_only['anomaly'] == -1, ['date', 'view']]  # anomaly
+            ax.plot(anomaly_only['date'], anomaly_only['view'], color='blue', label='view')
+            ax.scatter(a['date'], a['view'], color='red', label='Anomaly')
+            plt.legend()
+            plt.title("Second anomaly selected view counts")
+            plt.show(block=True)
+
+        else:
+            print("You selected 'None' in no.of anomaly running. By deafault, your selection is 1")
+            anomaly_only = anomaly_df.loc[anomaly_df['anomaly'] == -1]
+
+        # Tri plots for like and dislike
+        f = plt.figure()
+        gs = gridspec.GridSpec(2, 2)
+        ax1 = f.add_subplot(gs[0, 0])
+        ax2 = f.add_subplot(gs[0, 1])
+        ax3 = f.add_subplot(gs[1, :])
+
+        ax1.plot(anomaly_only['date'], anomaly_only['dislike'], color='red')
+        ax1.set_title("Dislike from anomaly selected", fontsize=10)
+        ax1.set_ylabel('Dislike Count')
+        ax1.grid(True)
+        ax1.tick_params(axis='x', rotation=45, labelsize=7)
+        ax1.grid(which='major', linestyle='--')
+        ax1.grid(which='minor', linestyle=':')
+
+        ax2.plot(anomaly_only['date'], anomaly_only['like'], color='blue')
+        ax2.set_title("Like from anomaly selected", fontsize=10)
+        ax2.set_ylabel('Like Count')
+        ax2.grid(True)
+        ax2.tick_params(axis='x', rotation=45, labelsize=7)
+        ax2.grid(which='major', linestyle='--')
+        ax2.grid(which='minor', linestyle=':')
+
+        ax3.plot(anomaly_only['date'], anomaly_only['view'])
+        ax3.set_title("View from anomaly selected", fontsize=10)
+        ax3.set_ylabel('View Count')
+        ax3.grid(True)
+        ax3.tick_params(axis='x', rotation=45, labelsize=7)
+        ax3.grid(which='major', linestyle='--')
+        ax3.grid(which='minor', linestyle=':')
+
+        f.subplots_adjust(wspace=0.2, hspace=0.5)
+        f.suptitle('All plots in anomaly selected')
+
+        # Like and Dislike in anomaly
+        fig, ax = plt.subplots()
+        ax.plot(anomaly_only['date'], anomaly_only['like'], label='Like')
+        ax.plot(anomaly_only['date'], anomaly_only['dislike'], color='red', label='Dislike')
+        ax.set_title("Like and dislike from anomaly selected", fontsize=18)
+        ax.set_ylabel('Like & Dislike')
+        ax.grid(True)
+        plt.show()
+
 ################################################################################################################################################################################
 ######## VIDEO LIST :
 youtube = youtube("AIzaSyAM1a_XGQnnLDyJ7oYmhJV8mBDRY7MDtxk")
@@ -414,7 +492,7 @@ analysis = analysis(scaler=1)
 fbtotal, fbratio, likeratio, dislikeratio = analysis.setup()
 analysis.allchart()
 analysis.seasonal_plot()
-anomaly_df = analysis.anomaly_plot(type='all', select='comment') #
+analysis.anomaly_plot(type='all', n_anomaly=2)
 
 ################################################################################################################################################################################
 ######## TEST PLACE :
@@ -426,57 +504,3 @@ channel_id = 'UCx6jsZ02B4K3SECUrkgPyzg'
 
 # add trend line
 # https://stackoverflow.com/questions/26447191/how-to-add-trendline-in-python-matplotlib-dot-scatter-graphs
-
-anomaly_only = anomaly_df.loc[anomaly_df['anomaly'] == -1]
-
-f = plt.figure()
-gs = gridspec.GridSpec(2, 2)
-
-ax1 = f.add_subplot(gs[0, 0])
-ax2 = f.add_subplot(gs[0, 1])
-ax3 = f.add_subplot(gs[1, :])
-
-ax1.plot(anomaly_only['date'], anomaly_only['dislike'], color='red')
-ax1.set_title("Dislike from anomaly selected", fontsize=10)
-ax1.set_ylabel('Dislike Count')
-ax1.grid(True)
-ax1.tick_params(axis='x', rotation=45, labelsize=7)
-ax1.grid(which='major', linestyle='--')
-ax1.grid(which='minor', linestyle=':')
-
-ax2.plot(anomaly_only['date'], anomaly_only['like'], color='blue')
-ax2.set_title("Like from anomaly selected", fontsize=10)
-ax2.set_ylabel('Like Count')
-ax2.grid(True)
-ax2.tick_params(axis='x', rotation=45, labelsize=7)
-ax2.grid(which='major', linestyle='--')
-ax2.grid(which='minor', linestyle=':')
-
-ax3.plot(anomaly_only['date'], anomaly_only['view'])
-ax3.set_title("View from anomaly selected", fontsize=10)
-ax3.set_ylabel('View Count')
-ax3.grid(True)
-ax3.tick_params(axis='x', rotation=45, labelsize=7)
-ax3.grid(which='major', linestyle='--')
-ax3.grid(which='minor', linestyle=':')
-
-f.subplots_adjust(wspace=0.2, hspace=0.5)
-f.suptitle('All Plots in anomaly selected')
-
-###############
-plt.figure(figsize=(12,5))
-plt.xlabel('Like & Dislike in anomaly date')
-
-''':type
-df = df.set_index(pd.to_datetime(df.date), drop=True)
-df.bitcoin.plot(grid=True, label="bitcoin", legend=True)
-df.tether.plot(secondary_y=True, label="tether", legend=True)
-'''
-anomaly_only.plot(anomaly_only['date'], anomaly_only['like'], color='blue', grid=True, label='Count')
-ax2 = anomaly_only.plot(anomaly_only['date'], anomaly_only['dislike'], color='red', grid=True, secondary_y=True, label='Sum')
-
-h1, l1 = ax1.get_legend_handles_labels()
-h2, l2 = ax2.get_legend_handles_labels()
-
-plt.legend(h1+h2, l1+l2, loc=2)
-plt.show()
