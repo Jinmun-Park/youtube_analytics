@@ -2,6 +2,13 @@
 regionCode : http://www.loc.gov/standards/iso639-2/php/code_list.php
 relevanceLanguage : https://www.iso.org/obp/ui/#search
 google_api_searchlist : https://developers.google.com/youtube/v3/docs/search/list
+
+anomaly detection
+https://towardsdatascience.com/time-series-of-price-anomaly-detection-13586cd5ff46
+https://neptune.ai/blog/anomaly-detection-in-time-series#:~:text=What%20are%20anomalies%2Foutliers%20and,generated%20by%20a%20different%20mechanism.%E2%80%9D
+
+add trend line
+https://stackoverflow.com/questions/26447191/how-to-add-trendline-in-python-matplotlib-dot-scatter-graphs
 '''
 # pip install google-api-python-client
 from googleapiclient.discovery import build #API
@@ -498,9 +505,98 @@ analysis.anomaly_plot(type='all', n_anomaly=2)
 ######## TEST PLACE :
 youtube = build('youtube', 'v3', developerKey="AIzaSyAM1a_XGQnnLDyJ7oYmhJV8mBDRY7MDtxk")
 channel_id = 'UCx6jsZ02B4K3SECUrkgPyzg'
-# anomaly detection
-# https://towardsdatascience.com/time-series-of-price-anomaly-detection-13586cd5ff46
-# https://neptune.ai/blog/anomaly-detection-in-time-series#:~:text=What%20are%20anomalies%2Foutliers%20and,generated%20by%20a%20different%20mechanism.%E2%80%9D
 
-# add trend line
-# https://stackoverflow.com/questions/26447191/how-to-add-trendline-in-python-matplotlib-dot-scatter-graphs
+'''
+import numpy as np
+import pandas as pd
+import re
+import nltk
+import spacy
+import string
+
+# Lower Case
+df["text_lower"] = df["text"].str.lower()
+df.head()
+
+# Removal of Punctuations
+df.drop(["text_lower"], axis=1, inplace=True)
+
+PUNCT_TO_REMOVE = string.punctuation
+def remove_punctuation(text):
+    """custom function to remove the punctuation"""
+    return text.translate(str.maketrans('', '', PUNCT_TO_REMOVE))
+
+df["text_wo_punct"] = df["text"].apply(lambda text: remove_punctuation(text))
+df.head()
+
+# Removal of stopwords
+from nltk.corpus import stopwords
+STOPWORDS = set(stopwords.words('english'))
+def remove_stopwords(text):
+    """custom function to remove the stopwords"""
+    return " ".join([word for word in str(text).split() if word not in STOPWORDS])
+
+df["text_wo_stop"] = df["text_wo_punct"].apply(lambda text: remove_stopwords(text))
+df.head()
+
+#Removal of Frequent words
+from collections import Counter
+
+cnt = Counter()
+for text in df["text_wo_stop"].values:
+    for word in text.split():
+        cnt[word] += 1
+
+cnt.most_common(10)
+
+FREQWORDS = set([w for (w, wc) in cnt.most_common(10)])
+def remove_freqwords(text):
+    """custom function to remove the frequent words"""
+    return " ".join([word for word in str(text).split() if word not in FREQWORDS])
+
+df["text_wo_stopfreq"] = df["text_wo_stop"].apply(lambda text: remove_freqwords(text))
+df.head()
+
+#Removal of Rare words
+df.drop(["text_wo_punct", "text_wo_stop"], axis=1, inplace=True)
+
+n_rare_words = 10
+RAREWORDS = set([w for (w, wc) in cnt.most_common()[:-n_rare_words-1:-1]])
+def remove_rarewords(text):
+    """custom function to remove the rare words"""
+    return " ".join([word for word in str(text).split() if word not in RAREWORDS])
+
+df["text_wo_stopfreqrare"] = df["text_wo_stopfreq"].apply(lambda text: remove_rarewords(text))
+df.head()
+
+# Stemming : Lemmatization
+from nltk.stem import WordNetLemmatizer
+
+lemmatizer = WordNetLemmatizer()
+def lemmatize_words(text):
+    return " ".join([lemmatizer.lemmatize(word) for word in text.split()])
+
+df["text_lemmatized"] = df["text"].apply(lambda text: lemmatize_words(text))
+df.head()
+
+lemmatizer.lemmatize("running")
+lemmatizer.lemmatize("running", "v") # v for verb
+print("Word is : stripes")
+print("Lemma result for verb : ",lemmatizer.lemmatize("stripes", 'v'))
+print("Lemma result for noun : ",lemmatizer.lemmatize("stripes", 'n'))
+
+# Lemmatization : Actual application
+from nltk.corpus import wordnet
+from nltk.stem import WordNetLemmatizer
+
+lemmatizer = WordNetLemmatizer()
+wordnet_map = {"N":wordnet.NOUN, "V":wordnet.VERB, "J":wordnet.ADJ, "R":wordnet.ADV}
+def lemmatize_words(text):
+    pos_tagged_text = nltk.pos_tag(text.split())
+    return " ".join([lemmatizer.lemmatize(word, wordnet_map.get(pos[0], wordnet.NOUN)) for word, pos in pos_tagged_text])
+
+df["text_lemmatized"] = df["text"].apply(lambda text: lemmatize_words(text))
+df.head()
+
+## Next step is to remove words using cheatsheet
+'''
