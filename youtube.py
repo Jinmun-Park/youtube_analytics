@@ -179,6 +179,8 @@ class analysis:
         comment = []
         global title
         title = []
+        global videoId
+        videoId = []
         #  ratio plots list
         fbtotal = []  # like+dislike
         fbratio = []  # fbtotal/view
@@ -197,8 +199,10 @@ class analysis:
             dislike.append(c)
             d = int(summary[i]['statistics']['commentCount']) / self.scaler
             comment.append(d)
-            extra = str(summary[i]['title'])
-            title.append(extra)
+            extra_01 = str(summary[i]['title'])
+            title.append(extra_01)
+            extra_02 = str(summary[i]['videoId'])
+            videoId.append(extra_02)
 
         for i in range(0, len(summary)):
             # Ratio plots
@@ -310,7 +314,7 @@ class analysis:
         plt.title("Seasonal Plot of Drug Sales Time Series", fontsize=20)
         plt.show()
 
-    def anomaly_plot(self, n_anomaly, type):
+    def anomaly(self, n_anomaly, type):
         #n_anomaly = 1, 2
         #type = 2d, 3d, all
         #select = view, like, dislike, comment
@@ -413,22 +417,24 @@ class analysis:
         plt.show(block=True)
 
         if n_anomaly == 1:
-            print("You selected '1' in no.of anomaly running.")
+            print(colored.fg('green'))
+            print("MESSAGE : You selected '1' in no.of anomaly running.")
+            print(colored.fg('white'))
             anomaly_only = anomaly_df.loc[anomaly_df['anomaly'] == -1]
         elif n_anomaly == 2:
-            print("You selected '2' in no.of anomaly running.")
+            print(colored.fg('green'))
+            print("MESSAGE : You selected '2' in no.of anomaly running.")
+            print(colored.fg('white'))
             anomaly_only = anomaly_df.loc[anomaly_df['anomaly'] == -1]
             anomaly_only = anomaly_only.drop('anomaly', axis=1)  # Remove first anomaly selected
             del data
-            data = anomaly_only[['view', 'like', 'dislike']]
+            data = anomaly_only[['view', 'like', 'dislike', 'comment']]
             clf = IsolationForest(n_estimators=100, max_samples='auto',
                                   max_features=1.0, bootstrap=False, n_jobs=-1, random_state=42, verbose=0)
             clf.fit(data)
             pred = clf.predict(data)
             anomaly_only['anomaly'] = pred  # Add second anomaly selected
 
-            outliers = anomaly_only.loc[anomaly_only['anomaly'] == -1]
-            outlier_index = list(outliers.index)
             print("Second anomaly selected values :")
             print(anomaly_only['anomaly'].value_counts())
 
@@ -440,8 +446,12 @@ class analysis:
             plt.title("Second anomaly selected view counts")
             plt.show(block=True)
 
+            # Select anomaly only
+            anomaly_only = anomaly_only.loc[anomaly_only['anomaly'] == -1]
         else:
-            print("You selected 'None' in no.of anomaly running. By deafault, your selection is 1")
+            print(colored.fg('green'))
+            print("MESSAGE : You selected 'None' in no.of anomaly running. By deafault, your selection is 1")
+            print(colored.fg('white'))
             anomaly_only = anomaly_df.loc[anomaly_df['anomaly'] == -1]
 
         # Tri plots for like and dislike
@@ -487,24 +497,59 @@ class analysis:
         ax.grid(True)
         plt.show()
 
+        anomaly_date = anomaly_only[['date']]
+        return anomaly_date
+
 ################################################################################################################################################################################
-######## VIDEO LIST :
+######## VIDEO LIST SETUP/BASIC :
 youtube = youtube("AIzaSyAM1a_XGQnnLDyJ7oYmhJV8mBDRY7MDtxk")
+######## VIDEO LIST DETAIL :
 trendvideo_list = youtube.trend_video(2021, 5, 19, after_day=7, n_max=10)
 popular_list = youtube.popular_video(n_max=20)
 
-######## CHANNEL ANALYSIS :
+################################################################################################################################################################################
+######## CHANNEL ANALYSIS SETUP/BASIC :
 summary = youtube.get_channel_stats('UCx6jsZ02B4K3SECUrkgPyzg', sort='date')
 analysis = analysis(scaler=1)
 fbtotal, fbratio, likeratio, dislikeratio = analysis.setup()
+######## CHANNEL ANALYSIS DETAIL :
 analysis.allchart()
 analysis.seasonal_plot()
-analysis.anomaly_plot(type='all', n_anomaly=2)
+anomaly_date = analysis.anomaly(type='all', n_anomaly=2)
 
 ################################################################################################################################################################################
 ######## TEST PLACE :
 youtube = build('youtube', 'v3', developerKey="AIzaSyAM1a_XGQnnLDyJ7oYmhJV8mBDRY7MDtxk")
 channel_id = 'UCx6jsZ02B4K3SECUrkgPyzg'
+
+sns.set()
+df = pd.DataFrame({'date': date, 'title': title, 'videoId': videoId, 'view': view, 'like': like, 'dislike': dislike, 'comment': comment,
+                   'fbtotal': fbtotal, 'fbratio': fbratio, 'likeratio': likeratio, 'dislikeratio': dislikeratio})
+df = pd.merge(df, anomaly_date, on=['date'])
+df_videoid = df[['videoId']]
+
+comment_df = []
+for i in range(0, len(df_videoid)):
+    videoId = df_videoid['videoId'][i]
+    print(i)
+    res_comments = youtube.commentThreads().list(part='snippet', videoId=videoId, order='relevance').execute()
+    print(videoId)
+
+    for j in range(0, len(res_comments['items'])):
+        data = res_comments['items'][j]['snippet']['topLevelComment']['snippet']
+        comment_df.append(data)
+
+comment_dic = []
+comment_sentiment = []
+for i in range(0, len(comment_df)):
+    dic = {'videoId': comment_df[i]['videoId'], 'likeCount': comment_df[i]['likeCount'],
+           'publishedAt': comment_df[i]['publishedAt'], 'text': comment_df[i]['textOriginal']}
+    comment_dic.append(dic)
+
+    dic_title = {'text': comment_df[i]['textOriginal']}
+    comment_sentiment.append(dic_title)
+    print(comment_sentiment[i])
+
 
 '''
 import numpy as np
