@@ -1,6 +1,6 @@
 ''':type
-regionCode : http://www.loc.gov/standards/iso639-2/php/code_list.php
-relevanceLanguage : https://www.iso.org/obp/ui/#search
+regionCode : https://www.iso.org/iso-3166-country-codes.html
+relevanceLanguage : https://www.loc.gov/standards/iso639-2/php/code_list.php
 google_api_searchlist : https://developers.google.com/youtube/v3/docs/search/list
 
 anomaly detection
@@ -29,8 +29,9 @@ class youtube:
     def __init__(self, api):
         self.api = api
 
-    def trend_video(self, year, month, day, after_day, n_max):
-
+    def trend_video(self, year, month, day, after_day, n_max, region, language):
+        # Region : MY, KR
+        # Language : en, ko
         youtube = build('youtube', 'v3', developerKey=self.api)
         print(colored.fg('green'))
         print("MESSAGE : Your start year/month/day :", year, "/", month, "/", day)
@@ -40,7 +41,7 @@ class youtube:
         end_time = datetime(year=year, month=month, day=day+after_day).strftime('%Y-%m-%dT%H:%M:%SZ')
 
         res_trendvideo = youtube.search().list(part='snippet', type='video', order='viewCount', maxResults=n_max,
-                                             regionCode='KR', relevanceLanguage='ko', publishedAfter=start_time,
+                                             regionCode=region, relevanceLanguage=language, publishedAfter=start_time,
                                              publishedBefore=end_time).execute()
         print(colored.fg('green'))
         print("MESSAGE : List of channel,video titles and channel id in top view counts")
@@ -57,7 +58,7 @@ class youtube:
 
         return trendvideo_list
 
-    def popular_video(self, n_max):
+    def popular_video(self, n_max, region):
 
         youtube = build('youtube', 'v3', developerKey=self.api)
         print(colored.fg('green'))
@@ -65,7 +66,7 @@ class youtube:
         print(colored.fg('white'))
 
         res_popular = youtube.videos().list(part='snippet', chart='mostPopular',
-                                            maxResults=n_max, regionCode='KR').execute()
+                                            maxResults=n_max, regionCode=region).execute()
 
         print(colored.fg('green'))
         print("MESSAGE : List of channel,video titles and channel id in top view counts")
@@ -210,11 +211,20 @@ class analysis:
             fbtotal.append(e)
 
         for i in range(0, len(summary)):
-            f = fbtotal[i] / view[i]  # fbtotal/view
+            try:
+                f = fbtotal[i] / view[i]  # fbtotal/view
+            except ZeroDivisionError:
+                f = 0
             fbratio.append(f)
-            g = like[i] / fbtotal[i]  # like/fbtotal
+            try:
+                g = like[i] / fbtotal[i]  # like/fbtotal
+            except ZeroDivisionError:
+                g = 0
             likeratio.append(g)
-            h = dislike[i] / fbtotal[i]  # dislike/fbtotal
+            try:
+                h = dislike[i] / fbtotal[i]  # dislike/fbtotal
+            except ZeroDivisionError:
+                h = 0
             dislikeratio.append(h)
 
         return fbtotal, fbratio, likeratio, dislikeratio
@@ -504,12 +514,12 @@ class analysis:
 ######## VIDEO LIST SETUP/BASIC :
 youtube = youtube("AIzaSyAM1a_XGQnnLDyJ7oYmhJV8mBDRY7MDtxk")
 ######## VIDEO LIST DETAIL :
-trendvideo_list = youtube.trend_video(2021, 5, 19, after_day=7, n_max=10)
-popular_list = youtube.popular_video(n_max=20)
+trendvideo_list = youtube.trend_video(2021, 5, 21, after_day=7, n_max=10, region='MY', language='en')
+popular_list = youtube.popular_video(n_max=20, region='MY')
 
 ################################################################################################################################################################################
 ######## CHANNEL ANALYSIS SETUP/BASIC :
-summary = youtube.get_channel_stats('UCx6jsZ02B4K3SECUrkgPyzg', sort='date')
+summary = youtube.get_channel_stats('UCYtNSrfGdXooZYu_hkq18_w', sort='date') #UCx6jsZ02B4K3SECUrkgPyzg
 analysis = analysis(scaler=1)
 fbtotal, fbratio, likeratio, dislikeratio = analysis.setup()
 ######## CHANNEL ANALYSIS DETAIL :
@@ -519,129 +529,5 @@ anomaly_date = analysis.anomaly(type='all', n_anomaly=2)
 
 ################################################################################################################################################################################
 ######## TEST PLACE :
-youtube = build('youtube', 'v3', developerKey="AIzaSyAM1a_XGQnnLDyJ7oYmhJV8mBDRY7MDtxk")
-channel_id = 'UCx6jsZ02B4K3SECUrkgPyzg'
-
-sns.set()
-df = pd.DataFrame({'date': date, 'title': title, 'videoId': videoId, 'view': view, 'like': like, 'dislike': dislike, 'comment': comment,
-                   'fbtotal': fbtotal, 'fbratio': fbratio, 'likeratio': likeratio, 'dislikeratio': dislikeratio})
-df = pd.merge(df, anomaly_date, on=['date'])
-df_videoid = df[['videoId']]
-
-comment_df = []
-for i in range(0, len(df_videoid)):
-    videoId = df_videoid['videoId'][i]
-    print(i)
-    res_comments = youtube.commentThreads().list(part='snippet', videoId=videoId, order='relevance').execute()
-    print(videoId)
-
-    for j in range(0, len(res_comments['items'])):
-        data = res_comments['items'][j]['snippet']['topLevelComment']['snippet']
-        comment_df.append(data)
-
-comment_dic = []
-comment_sentiment = []
-for i in range(0, len(comment_df)):
-    dic = {'videoId': comment_df[i]['videoId'], 'likeCount': comment_df[i]['likeCount'],
-           'publishedAt': comment_df[i]['publishedAt'], 'text': comment_df[i]['textOriginal']}
-    comment_dic.append(dic)
-
-    dic_title = {'text': comment_df[i]['textOriginal']}
-    comment_sentiment.append(dic_title)
-    print(comment_sentiment[i])
 
 
-'''
-import numpy as np
-import pandas as pd
-import re
-import nltk
-import spacy
-import string
-
-# Lower Case
-df["text_lower"] = df["text"].str.lower()
-df.head()
-
-# Removal of Punctuations
-df.drop(["text_lower"], axis=1, inplace=True)
-
-PUNCT_TO_REMOVE = string.punctuation
-def remove_punctuation(text):
-    """custom function to remove the punctuation"""
-    return text.translate(str.maketrans('', '', PUNCT_TO_REMOVE))
-
-df["text_wo_punct"] = df["text"].apply(lambda text: remove_punctuation(text))
-df.head()
-
-# Removal of stopwords
-from nltk.corpus import stopwords
-STOPWORDS = set(stopwords.words('english'))
-def remove_stopwords(text):
-    """custom function to remove the stopwords"""
-    return " ".join([word for word in str(text).split() if word not in STOPWORDS])
-
-df["text_wo_stop"] = df["text_wo_punct"].apply(lambda text: remove_stopwords(text))
-df.head()
-
-#Removal of Frequent words
-from collections import Counter
-
-cnt = Counter()
-for text in df["text_wo_stop"].values:
-    for word in text.split():
-        cnt[word] += 1
-
-cnt.most_common(10)
-
-FREQWORDS = set([w for (w, wc) in cnt.most_common(10)])
-def remove_freqwords(text):
-    """custom function to remove the frequent words"""
-    return " ".join([word for word in str(text).split() if word not in FREQWORDS])
-
-df["text_wo_stopfreq"] = df["text_wo_stop"].apply(lambda text: remove_freqwords(text))
-df.head()
-
-#Removal of Rare words
-df.drop(["text_wo_punct", "text_wo_stop"], axis=1, inplace=True)
-
-n_rare_words = 10
-RAREWORDS = set([w for (w, wc) in cnt.most_common()[:-n_rare_words-1:-1]])
-def remove_rarewords(text):
-    """custom function to remove the rare words"""
-    return " ".join([word for word in str(text).split() if word not in RAREWORDS])
-
-df["text_wo_stopfreqrare"] = df["text_wo_stopfreq"].apply(lambda text: remove_rarewords(text))
-df.head()
-
-# Stemming : Lemmatization
-from nltk.stem import WordNetLemmatizer
-
-lemmatizer = WordNetLemmatizer()
-def lemmatize_words(text):
-    return " ".join([lemmatizer.lemmatize(word) for word in text.split()])
-
-df["text_lemmatized"] = df["text"].apply(lambda text: lemmatize_words(text))
-df.head()
-
-lemmatizer.lemmatize("running")
-lemmatizer.lemmatize("running", "v") # v for verb
-print("Word is : stripes")
-print("Lemma result for verb : ",lemmatizer.lemmatize("stripes", 'v'))
-print("Lemma result for noun : ",lemmatizer.lemmatize("stripes", 'n'))
-
-# Lemmatization : Actual application
-from nltk.corpus import wordnet
-from nltk.stem import WordNetLemmatizer
-
-lemmatizer = WordNetLemmatizer()
-wordnet_map = {"N":wordnet.NOUN, "V":wordnet.VERB, "J":wordnet.ADJ, "R":wordnet.ADV}
-def lemmatize_words(text):
-    pos_tagged_text = nltk.pos_tag(text.split())
-    return " ".join([lemmatizer.lemmatize(word, wordnet_map.get(pos[0], wordnet.NOUN)) for word, pos in pos_tagged_text])
-
-df["text_lemmatized"] = df["text"].apply(lambda text: lemmatize_words(text))
-df.head()
-
-## Next step is to remove words using cheatsheet
-'''
