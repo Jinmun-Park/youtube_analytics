@@ -1,34 +1,39 @@
+'''
+Emoji_dictionary : https://unicode.org/emoji/charts-13.0/full-emoji-list.html
+'''
+
 from googleapiclient.discovery import build
 import seaborn as sns
 import pandas as pd
 import numpy as np
 from matplotlib import pyplot as plt
 import colored
+import plotly.express as px # Text anaylisis plot
 
 #sentiment
 import re
 import spacy
 import string
 import nltk
-nltk.download('stopwords')
+from nltk.tokenize.toktok import ToktokTokenizer
+from nltk.tokenize import word_tokenize
+#nltk.download('stopwords')
 from nltk.corpus import stopwords
-nltk.download('wordnet')
-nltk.download('averaged_perceptron_tagger')
+#nltk.download('wordnet')
+#nltk.download('averaged_perceptron_tagger')
 from nltk.corpus import wordnet #lemmatization
 from nltk.stem import WordNetLemmatizer #lemmatization
-from collections import Counter #frequent works
+from collections import Counter #frequent/rare works
 
-
+################################################################################################################################################################################
 youtube = build('youtube', 'v3', developerKey="AIzaSyAM1a_XGQnnLDyJ7oYmhJV8mBDRY7MDtxk")
 channel_id = 'UCx6jsZ02B4K3SECUrkgPyzg'
+################################################################################################################################################################################
 
 # Sentiment anlaysis
 class sentiment_analysis:
     def __init__(self, scaler):
         self.scaler = int(scaler)
-
-    def sentiment_setup(self):
-
 
 sns.set()
 print(colored.fg('green'))
@@ -36,23 +41,26 @@ print('MESSAGE : Selected anomaly dates in your channel :', len(anomaly_date))
 print('MESSAGE : This is your date vide selected : ')
 print(colored.fg('white'))
 print(anomaly_date)
+
+# Step 1 : select anomaly date only in df
 df = pd.DataFrame({'date': date, 'title': title, 'videoId': videoId, 'view': view, 'like': like, 'dislike': dislike, 'comment': comment,
                    'fbtotal': fbtotal, 'fbratio': fbratio, 'likeratio': likeratio, 'dislikeratio': dislikeratio})
 df = pd.merge(df, anomaly_date, on=['date'])
 df_videoid = df[['videoId']]
 
-
+# Step 2 : commentThreads()
 comment_df = []
 for i in range(0, len(df_videoid)):
-    videoId = df_videoid['videoId'][i]
+    id = df_videoid['videoId'][i]
     print(i)
-    res_comments = youtube.commentThreads().list(part='snippet', videoId=videoId, order='relevance').execute()
-    print(videoId)
+    res_comments = youtube.commentThreads().list(part='snippet', videoId=id, order='relevance').execute()
+    print(id)
 
     for j in range(0, len(res_comments['items'])):
         data = res_comments['items'][j]['snippet']['topLevelComment']['snippet']
         comment_df.append(data)
 
+# Step 3 : Extrect Text and numeric information
 comment_dic = []
 comment_sentiment = []
 for i in range(0, len(comment_df)):
@@ -64,62 +72,30 @@ for i in range(0, len(comment_df)):
     comment_sentiment.append(dic_title)
     print(comment_sentiment[i])
 
-# Converting dataframe
+# Step 4 : Converting dataframe
 comment_sentiment = pd.DataFrame(comment_sentiment)
 
-# Lower case
-comment_sentiment["lower_text"] = comment_sentiment["original_text"].str.lower()
+# Step 5 : Text Transformation
+# Transformation 001 : clean text
+def remove_cleantext(text):
+    '''Make text lowercase, remove text in square brackets,remove links,remove punctuation
+    and remove words containing numbers.'''
+    text = str(text).lower() # Lower
+    text = re.sub('\[.*?\]', '', text) # SquareBracket
+    text = re.sub('https?://\S+|www\.\S+', '', text) # URL
+    text = re.sub('<.*?>+', '', text) # Bracket
+    text = re.sub('[%s]' % re.escape(string.punctuation), '', text) # Punctuation
+    text = re.sub('\n', ' ', text) #
+    text = re.sub('(?<=#)\w+', '', text) # Hash
+    text = re.sub('[\w\.-]+@[\w\.-]+', '', text) # Email
+    text = re.sub('[0-9]+', '', text) # Number
+    text = text.strip()
+    #text = text.strip() # Remove Space
+    #text = text.split() # Remove Space
+    return text
 
-# Removal punctuation
-rem_punctuation = string.punctuation
-def remove_punctuation(text):
-    return text.translate(str.maketrans('', '', rem_punctuation))
-comment_sentiment["punct_text"] = comment_sentiment["lower_text"].apply(lambda text: remove_punctuation(text))
-
-# Stopwords
-rem_stopwords = set(stopwords.words('english'))
-def remove_stopwords(text):
-    return " ".join([word for word in str(text).split() if word not in rem_stopwords])
-comment_sentiment["stopword_text"] = comment_sentiment["punct_text"].apply(lambda text: remove_stopwords(text))
-
-# Removal of frequent words
-cnt = Counter()
-for text in comment_sentiment["punct_text"].values:
-    for word in text.split():
-        cnt[word] += 1
-print(cnt.most_common(10))
-
-rem_frewords = set([w for (w, wc) in cnt.most_common(10)])
-def remove_freqwords(text):
-    return " ".join([word for word in str(text).split() if word not in rem_frewords])
-
-comment_sentiment["stopfre_text"] = comment_sentiment["stopword_text"].apply(lambda text: remove_freqwords(text))
-
-# Removal of rare words
-comment_sentiment.drop(["lower_text", "punct_text", "stopword_text"], axis=1, inplace=True)
-n_rare_words = 50
-remove_rare = set([w for (w, wc) in cnt.most_common()[:-n_rare_words-1:-1]])
-print(remove_rare)
-
-def remove_rarewords(text):
-    return " ".join([word for word in str(text).split() if word not in remove_rare])
-
-comment_sentiment["rare_text"] = comment_sentiment["stopfre_text"].apply(lambda text: remove_rarewords(text))
-comment_sentiment.drop(["stopfre_text"], axis=1, inplace=True)
-
-
-# Lemmatization (I am not using stemming : https://www.kaggle.com/sudalairajkumar/getting-started-with-text-preprocessing)
-lemmatizer = WordNetLemmatizer()
-wordnet_map = {"N":wordnet.NOUN, "V":wordnet.VERB, "J":wordnet.ADJ, "R":wordnet.ADV}
-def lemmatize_words(text):
-    pos_tagged_text = nltk.pos_tag(text.split())
-    return " ".join([lemmatizer.lemmatize(word, wordnet_map.get(pos[0], wordnet.NOUN)) for word, pos in pos_tagged_text])
-
-comment_sentiment["lemmatized_text"] = comment_sentiment["rare_text"].apply(lambda text: lemmatize_words(text))
-comment_sentiment.drop(["rare_text"], axis=1, inplace=True)
-
-# Removal of Emoji & Emoticons
-def remove_emoji(string):
+# Transformation 002 : Removal of Emoji & Emoticons
+def remove_emoji(text):
     emoji_pattern = re.compile("["
                            u"\U0001F600-\U0001F64F"  # emoticons
                            u"\U0001F300-\U0001F5FF"  # symbols & pictographs
@@ -127,8 +103,10 @@ def remove_emoji(string):
                            u"\U0001F1E0-\U0001F1FF"  # flags (iOS)
                            u"\U00002702-\U000027B0"
                            u"\U000024C2-\U0001F251"
+                           u"\U0001F3C6" # trophy
+                           u"\U0001F947" # trophy                               
                            "]+", flags=re.UNICODE)
-    return emoji_pattern.sub(r'', string)
+    return emoji_pattern.sub(r'', text)
 
 rem_emoticons = {
     u":‑\)":"Happy face or smiley",
@@ -351,15 +329,95 @@ rem_emoticons = {
     u"\(\*￣m￣\)":"Dissatisfied",
     u"\(‘A`\)":"Snubbed or Deflated"
 }
-
 def remove_emoticons(text):
     emoticon_pattern = re.compile(u'(' + u'|'.join(k for k in rem_emoticons) + u')')
     return emoticon_pattern.sub(r'', text)
 
-comment_sentiment["emoji_text"] = comment_sentiment["lemmatized_text"].apply(lambda string: remove_emoji(string))
-comment_sentiment["emoticon_text"] = comment_sentiment["emoji_text"].apply(lambda text: remove_emoticons(text))
-comment_sentiment.drop(["lemmatized_text", "emoji_text"], axis=1, inplace=True)
+################################################################################################################################################################################
+comment_sentiment["transformed_text"] = comment_sentiment["original_text"].apply(lambda x:remove_cleantext(x))
+comment_sentiment["transformed_text"] = comment_sentiment["transformed_text"].apply(lambda text: remove_emoji(text))
+comment_sentiment["transformed_text"] = comment_sentiment["transformed_text"].apply(lambda text: remove_emoticons(text))
+################################################################################################################################################################################
 
+# Transformation 003 : Removal of frequent/rare words
+n_freq_words = 0
+n_rare_words = 10
 
+cnt = Counter()
+for text in comment_sentiment["transformed_text"].values:
+    for word in text.split():
+        cnt[word] += 1
 
+rem_frewords = set([w for (w, wc) in cnt.most_common(n_freq_words)])
+rem_rare = set([w for (w, wc) in cnt.most_common()[:-n_rare_words-1:-1]])
 
+print(colored.fg('green'))
+print('MESSAGE : Frequent words :',rem_frewords)
+print('MESSAGE : Rare words :', rem_rare)
+print(colored.fg('white'))
+
+def remove_freqwords(text):
+    return " ".join([word for word in str(text).split() if word not in rem_frewords])
+
+def remove_rarewords(text):
+    return " ".join([word for word in str(text).split() if word not in rem_rare])
+
+################################################################################################################################################################################
+comment_sentiment["transformed_text"] = comment_sentiment["transformed_text"].apply(lambda text: remove_freqwords(text))
+comment_sentiment["transformed_text"] = comment_sentiment["transformed_text"].apply(lambda text: remove_rarewords(text))
+################################################################################################################################################################################
+
+# Transformation 004 : Tokenization and Stopwords
+tokenizer=ToktokTokenizer()
+rem_stopwords = set(stopwords.words('english'))
+
+def remove_stopwords(text):
+    tokens = tokenizer.tokenize(text)
+    tokens = [token.strip() for token in tokens]
+    filtered_tokens = [token for token in tokens if token not in rem_stopwords]
+    filtered_text = " ".join(filtered_tokens)
+    return filtered_text
+
+# Transformation 005 : Lemmatization (I am not using stemming : https://www.kaggle.com/sudalairajkumar/getting-started-with-text-preprocessing)
+lemmatizer = WordNetLemmatizer()
+wordnet_map = {"N":wordnet.NOUN, "V":wordnet.VERB, "J":wordnet.ADJ, "R":wordnet.ADV}
+def lemmatize_words(text):
+    pos_tagged_text = nltk.pos_tag(text.split())
+    return " ".join([lemmatizer.lemmatize(word, wordnet_map.get(pos[0], wordnet.NOUN)) for word, pos in pos_tagged_text])
+
+def tokenize(text):
+    tokens = tokenizer.tokenize(text)
+    tokens = [token.strip() for token in tokens]
+    return tokens
+
+################################################################################################################################################################################
+comment_sentiment['transformed_text'] = comment_sentiment['transformed_text'].apply(remove_stopwords)
+comment_sentiment['transformed_text'] = comment_sentiment['transformed_text'].apply(lambda text: lemmatize_words(text))
+comment_sentiment['transformed_text'] = comment_sentiment['transformed_text'].apply(tokenize)
+################################################################################################################################################################################
+
+# Step 6 : Count
+n_freq_words = 20
+count = Counter([item for sublist in comment_sentiment['transformed_text'] for item in sublist])
+show_count = pd.DataFrame(count.most_common(n_freq_words))
+show_count.columns = ['Common_words','count']
+show_count.style.background_gradient(cmap='Blues')
+
+# Set black list
+blacklist = ["’"]
+def remove_blacklist(text):
+    text = [i for i in text if (i not in blacklist)]
+    return text
+comment_sentiment['transformed_text'] = comment_sentiment['transformed_text'].apply(lambda x: [i for i in x if i not in blacklist])
+
+# Count again
+n_freq_words = 20
+count = Counter([item for sublist in comment_sentiment['transformed_text'] for item in sublist])
+show_count = pd.DataFrame(count.most_common(n_freq_words))
+show_count.columns = ['Common_words','count']
+show_count.style.background_gradient(cmap='Blues')
+
+# Plot
+fig = px.bar(show_count, x="count", y="Common_words", title='Commmon Words in Selected Text', orientation='h',
+             width=700, height=700,color='Common_words')
+fig.show()
