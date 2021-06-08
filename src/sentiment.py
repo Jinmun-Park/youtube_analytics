@@ -1,5 +1,12 @@
 '''
 Emoji_dictionary : https://unicode.org/emoji/charts-13.0/full-emoji-list.html
+
+https://www.kaggle.com/tanulsingh077/deep-learning-for-nlp-zero-to-transformers-bert
+https://www.kaggle.com/thiagopanini/e-commerce-sentiment-analysis-eda-viz-nlp
+https://www.kaggle.com/ankkur13/sentiment-analysis-nlp-wordcloud-textblob
+https://www.kaggle.com/arthurtok/spooky-nlp-and-topic-modelling-tutorial/data
+https://www.kaggle.com/shailaja4247/sentiment-analysis-of-tweets-wordclouds-textblob
+https://www.kaggle.com/lakshmi25npathi/sentiment-analysis-of-imdb-movie-reviews
 '''
 
 from googleapiclient.discovery import build
@@ -68,9 +75,13 @@ for i in range(0, len(comment_df)):
            'publishedAt': comment_df[i]['publishedAt'], 'text': comment_df[i]['textOriginal']}
     comment_dic.append(dic)
 
-    dic_title = {'original_text': comment_df[i]['textOriginal']}
+    dic_title = {'publishedAt': comment_df[i]['publishedAt'], 'original_text': comment_df[i]['textOriginal']}
     comment_sentiment.append(dic_title)
     print(comment_sentiment[i])
+
+for i in range(0, len(comment_sentiment)):
+    comment_sentiment[i]['publishedAt'] = datetime.strptime(comment_sentiment[i]['publishedAt'], '%Y-%m-%dT%H:%M:%SZ')
+    comment_sentiment[i]['publishedAt'] = datetime.strftime(comment_sentiment[i]['publishedAt'], '%Y-%m-%d-%H')
 
 # Step 4 : Converting dataframe
 comment_sentiment = pd.DataFrame(comment_sentiment)
@@ -368,7 +379,7 @@ comment_sentiment["transformed_text"] = comment_sentiment["transformed_text"].ap
 ################################################################################################################################################################################
 
 # Transformation 004 : Tokenization and Stopwords
-tokenizer=ToktokTokenizer()
+tokenizer=ToktokTokenizer() #This tokenizer is for a better stopwords. Actual tokenization will be placed in sentiment score.
 rem_stopwords = set(stopwords.words('english'))
 
 def remove_stopwords(text):
@@ -385,39 +396,65 @@ def lemmatize_words(text):
     pos_tagged_text = nltk.pos_tag(text.split())
     return " ".join([lemmatizer.lemmatize(word, wordnet_map.get(pos[0], wordnet.NOUN)) for word, pos in pos_tagged_text])
 
-def tokenize(text):
-    tokens = tokenizer.tokenize(text)
-    tokens = [token.strip() for token in tokens]
-    return tokens
 
 ################################################################################################################################################################################
 comment_sentiment['transformed_text'] = comment_sentiment['transformed_text'].apply(remove_stopwords)
 comment_sentiment['transformed_text'] = comment_sentiment['transformed_text'].apply(lambda text: lemmatize_words(text))
-comment_sentiment['transformed_text'] = comment_sentiment['transformed_text'].apply(tokenize)
 ################################################################################################################################################################################
 
-# Step 6 : Count
+# Transformation 006 : Add Blacklist manually using early tokenized words.
+def tokenize(text):
+    tokens = tokenizer.tokenize(text)
+    return tokens
+comment_sentiment['earlytoken_text'] = comment_sentiment['transformed_text'].apply(tokenize)
+
+# T006-001 : Plot
 n_freq_words = 20
-count = Counter([item for sublist in comment_sentiment['transformed_text'] for item in sublist])
+count = Counter([item for sublist in comment_sentiment['earlytoken_text'] for item in sublist])
 show_count = pd.DataFrame(count.most_common(n_freq_words))
 show_count.columns = ['Common_words','count']
 show_count.style.background_gradient(cmap='Blues')
-
-# Set black list
-blacklist = ["’"]
-def remove_blacklist(text):
-    text = [i for i in text if (i not in blacklist)]
-    return text
-comment_sentiment['transformed_text'] = comment_sentiment['transformed_text'].apply(lambda x: [i for i in x if i not in blacklist])
-
-# Count again
-n_freq_words = 20
-count = Counter([item for sublist in comment_sentiment['transformed_text'] for item in sublist])
-show_count = pd.DataFrame(count.most_common(n_freq_words))
-show_count.columns = ['Common_words','count']
-show_count.style.background_gradient(cmap='Blues')
-
-# Plot
-fig = px.bar(show_count, x="count", y="Common_words", title='Commmon Words in Selected Text', orientation='h',
+fig = px.bar(show_count, x="count", y="Common_words", title='Commmon Words in eary tokenized words (Before Blacklist)', orientation='h',
              width=700, height=700,color='Common_words')
 fig.show()
+
+# T006-002 : Set blacklist
+blacklist = ["’"]
+def remove_blacklist(text):
+    return " ".join([word for word in str(text).split() if word not in blacklist])
+comment_sentiment["transformed_text"] = comment_sentiment["transformed_text"].apply(lambda text: remove_blacklist(text))
+comment_sentiment['earlytoken_text'] = comment_sentiment['transformed_text'].apply(tokenize)
+
+# T006-003 : Plot again
+n_freq_words = 20
+count = Counter([item for sublist in comment_sentiment['earlytoken_text'] for item in sublist])
+show_count = pd.DataFrame(count.most_common(n_freq_words))
+show_count.columns = ['Common_words','count']
+show_count.style.background_gradient(cmap='Blues')
+fig = px.bar(show_count, x="count", y="Common_words", title='Commmon Words in eary tokenized words (After Blacklist)', orientation='h',
+             width=700, height=700,color='Common_words')
+fig.show()
+
+comment_sentiment.drop('earlytoken_text', axis=1, inplace=True)
+comment_sentiment.drop('original_text', axis=1, inplace=True)
+
+################################################################################################################################################################################
+# Transformation 007 : Polarity and Subjectivity
+from textblob import TextBlob
+comment_sentiment['polarity'] = comment_sentiment['transformed_text'].apply(lambda x: TextBlob(x).sentiment[0])
+comment_sentiment['subjectivity'] = comment_sentiment['transformed_text'].apply(lambda x: TextBlob(x).sentiment[0])
+################################################################################################################################################################################
+
+sentiment_polarity = comment_sentiment.groupby(
+    ['publishedAt'])['polarity'].apply(lambda x: x.astype(float).sum()).reset_index()
+
+sns.set()
+fig, ax = plt.subplots()
+ax.plot(sentiment_polarity['publishedAt'], sentiment_polarity['polarity'], label='Like')
+ax.set_title("Polarity in Youtue Comments", fontsize=18)
+ax.set_xlabel('Date')
+ax.set_ylabel('Polarity level')
+ax.grid(True)
+plt.show()
+
+#https://www.youtube.com/watch?v=szczpgOEdXs&t=906s

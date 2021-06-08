@@ -11,6 +11,7 @@ add trend line
 https://stackoverflow.com/questions/26447191/how-to-add-trendline-in-python-matplotlib-dot-scatter-graphs
 '''
 # pip install google-api-python-client
+
 from googleapiclient.discovery import build #API
 from datetime import datetime
 import pandas as pd
