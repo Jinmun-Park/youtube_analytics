@@ -414,9 +414,29 @@ count = Counter([item for sublist in comment_sentiment['earlytoken_text'] for it
 show_count = pd.DataFrame(count.most_common(n_freq_words))
 show_count.columns = ['Common_words','count']
 show_count.style.background_gradient(cmap='Blues')
-fig = px.bar(show_count, x="count", y="Common_words", title='Commmon Words in eary tokenized words (Before Blacklist)', orientation='h',
-             width=700, height=700,color='Common_words')
-fig.show()
+
+# Figure
+fig, ax = plt.subplots(figsize=(16, 9))
+ax.barh(show_count['Common_words'], show_count['count'])
+for s in ['top', 'bottom', 'left', 'right']:
+    ax.spines[s].set_visible(False)
+
+ax.xaxis.set_ticks_position('none')
+ax.yaxis.set_ticks_position('none')
+ax.xaxis.set_tick_params(pad=5)
+ax.yaxis.set_tick_params(pad=10)
+ax.grid(b=True, color='grey', linestyle='-.', linewidth=0.5, alpha=0.2)
+ax.invert_yaxis()
+
+# Add annotation to bars
+for i in ax.patches:
+    plt.text(i.get_width() + 0.2, i.get_y() + 0.5, str(round((i.get_width()), 2)),
+             fontsize=10, fontweight='bold', color='grey')
+
+ax.set_title('Common words in every tokenizedw words Before BLACKLIS', loc='left', )
+fig.text(0.9, 0.15, 'Before Blacklist', fontsize=12, color='grey', ha='right', va='bottom', alpha=0.7)
+plt.show(block=True)
+
 
 # T006-002 : Set blacklist
 blacklist = ["’"]
@@ -431,9 +451,28 @@ count = Counter([item for sublist in comment_sentiment['earlytoken_text'] for it
 show_count = pd.DataFrame(count.most_common(n_freq_words))
 show_count.columns = ['Common_words','count']
 show_count.style.background_gradient(cmap='Blues')
-fig = px.bar(show_count, x="count", y="Common_words", title='Commmon Words in eary tokenized words (After Blacklist)', orientation='h',
-             width=700, height=700,color='Common_words')
-fig.show()
+
+# Figure
+fig, ax = plt.subplots(figsize=(12, 9))
+ax.barh(show_count['Common_words'], show_count['count'])
+for s in ['top', 'bottom', 'left', 'right']:
+    ax.spines[s].set_visible(False)
+
+ax.xaxis.set_ticks_position('none')
+ax.yaxis.set_ticks_position('none')
+ax.xaxis.set_tick_params(pad=5)
+ax.yaxis.set_tick_params(pad=10)
+ax.grid(b=True, color='grey', linestyle='-.', linewidth=0.5, alpha=0.2)
+ax.invert_yaxis()
+
+# Add annotation to bars
+for i in ax.patches:
+    plt.text(i.get_width() + 0.2, i.get_y() + 0.5, str(round((i.get_width()), 2)),
+             fontsize=10, fontweight='bold', color='grey')
+
+ax.set_title('Common words in every tokenizedw words After BLACKLIS', loc='left', )
+fig.text(0.9, 0.15, 'Before Blacklist', fontsize=12, color='grey', ha='right', va='bottom', alpha=0.7)
+plt.show(block=True)
 
 comment_sentiment.drop('earlytoken_text', axis=1, inplace=True)
 comment_sentiment.drop('original_text', axis=1, inplace=True)
@@ -455,6 +494,71 @@ ax.set_title("Polarity in Youtue Comments", fontsize=18)
 ax.set_xlabel('Date')
 ax.set_ylabel('Polarity level')
 ax.grid(True)
-plt.show()
+plt.show(block=True)
 
 #https://www.youtube.com/watch?v=szczpgOEdXs&t=906s
+
+
+# Transformation 008 : Pytorch sentiment analysis
+#pip3 install torch==1.8.1+cu111 torchvision==0.9.1+cu111 torchaudio===0.8.1 -f https://download.pytorch.org/whl/torch_stable.html
+#pip install transformers
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
+import torch
+
+tokenizer = AutoTokenizer.from_pretrained('nlptown/bert-base-multilingual-uncased-sentiment')
+model = AutoModelForSequenceClassification.from_pretrained('nlptown/bert-base-multilingual-uncased-sentiment')
+
+# Check Sequence Length
+token_lens = []
+for text in comment_sentiment.transformed_text:
+  tokens = tokenizer.encode(text, truncation=True)
+  token_lens.append(len(tokens))
+
+sns.displot(token_lens, kde=True).set(title='Tokenized counts and length')
+plt.xlim([0, 256])
+plt.xlabel('Token count')
+plt.show(block=True)
+
+# Check Sequence Length
+def sentiment_score(review):
+    tokens = tokenizer.encode(review, return_tensors='pt')
+    result = model(tokens)
+    return int(torch.argmax(result.logits))+1
+
+comment_sentiment['sentiment'] = comment_sentiment['transformed_text'].apply(lambda x: sentiment_score(x[:250]))
+
+# Plot Sentiment Scores
+sentiment_bert = comment_sentiment.groupby(
+    ['publishedAt'])['sentiment'].apply(lambda x: x.astype(float).sum()).reset_index()
+
+fig, ax = plt.subplots(figsize=(12, 9))
+ax.plot(sentiment_bert['publishedAt'], sentiment_bert['sentiment'], label='Like')
+ax.set_title("BERT sum of sentiment scores", fontsize=18)
+ax.set_xlabel('Date')
+ax.set_ylabel('Sum of sentiment scores')
+ax.grid(True)
+plt.show(block=True)
+
+# Plot Sentiment Counts
+sentiment_count = comment_sentiment.groupby(
+    ['sentiment'])['transformed_text'].agg(['nunique']).reset_index()
+
+fig, ax = plt.subplots(figsize=(12, 9))
+ax.barh(sentiment_count['sentiment'], sentiment_count['nunique'])
+for s in ['top', 'bottom', 'left', 'right']:
+    ax.spines[s].set_visible(False)
+
+ax.xaxis.set_ticks_position('none')
+ax.yaxis.set_ticks_position('none')
+ax.xaxis.set_tick_params(pad=5)
+ax.yaxis.set_tick_params(pad=10)
+ax.grid(b=True, color='grey', linestyle='-.', linewidth=0.5, alpha=0.2)
+ax.invert_yaxis()
+
+# Add annotation to bars
+for i in ax.patches:
+    plt.text(i.get_width() + 0.2, i.get_y() + 0.5, str(round((i.get_width()), 2)),
+             fontsize=10, fontweight='bold', color='grey')
+
+ax.set_title('sentiment counts', loc='left', fontsize=18)
+plt.show(block=True)
