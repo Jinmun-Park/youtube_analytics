@@ -12,10 +12,13 @@ https://stackoverflow.com/questions/26447191/how-to-add-trendline-in-python-matp
 '''
 # pip install google-api-python-client
 
+# youtube class
 from googleapiclient.discovery import build #API
 from datetime import datetime
 import pandas as pd
 import numpy as np
+
+# analysis class
 from matplotlib import pyplot as plt
 import matplotlib as mpl # Seasonal plot
 import matplotlib.gridspec as gridspec #Splitplot
@@ -24,6 +27,23 @@ import colored
 from sklearn.decomposition import PCA #Anomaly
 from sklearn.preprocessing import StandardScaler #Anomaly
 from sklearn.ensemble import IsolationForest #Anomaly
+
+# sentiment class
+import re
+import string
+import nltk
+from nltk.tokenize.toktok import ToktokTokenizer
+#nltk.download('stopwords')
+from nltk.corpus import stopwords
+#nltk.download('wordnet')
+#nltk.download('averaged_perceptron_tagger')
+from nltk.corpus import wordnet #lemmatization
+from nltk.stem import WordNetLemmatizer #lemmatization
+from collections import Counter #frequent/rare works
+
+# sentiment removal functions
+from src.sentiment_func import *
+
 
 # API Search list :
 class youtube:
@@ -449,7 +469,7 @@ class analysis:
             print("Second anomaly selected values :")
             print(anomaly_only['anomaly'].value_counts())
 
-            fig, ax = plt.subplots(figsize=(10, 6))
+            fig, ax = plt.subplots(figsize=(12, 8))
             a = anomaly_only.loc[anomaly_only['anomaly'] == -1, ['date', 'view']]  # anomaly
             ax.plot(anomaly_only['date'], anomaly_only['view'], color='blue', label='view')
             ax.scatter(a['date'], a['view'], color='red', label='Anomaly')
@@ -511,24 +531,124 @@ class analysis:
         anomaly_date = anomaly_only[['date']]
         return anomaly_date
 
+class sentiment(youtube):
+    def __init__(self, api):
+        super().__init__(api)
+
+    def preprocessing(self, freq, rare):
+        youtube = build('youtube', 'v3', developerKey=self.api)
+
+        sns.set()
+        print(colored.fg('green'))
+        print('MESSAGE : Selected anomaly dates in your channel :', len(anomaly_date))
+        print('MESSAGE : This is your date vide selected : ')
+        print(colored.fg('white'))
+        print(anomaly_date)
+
+        # Step 1 : select anomaly date only in df
+        df = pd.DataFrame(
+            {'date': date, 'title': title, 'videoId': videoId, 'view': view, 'like': like, 'dislike': dislike,
+             'comment': comment,
+             'fbtotal': fbtotal, 'fbratio': fbratio, 'likeratio': likeratio, 'dislikeratio': dislikeratio})
+        df = pd.merge(df, anomaly_date, on=['date'])
+        df_videoid = df[['videoId']]
+
+        # Step 2 : commentThreads()
+        comment_df = []
+        for i in range(0, len(df_videoid)):
+            id = df_videoid['videoId'][i]
+            print(i)
+            res_comments = youtube.commentThreads().list(part='snippet', videoId=id, order='relevance').execute()
+            print(id)
+
+            for j in range(0, len(res_comments['items'])):
+                data = res_comments['items'][j]['snippet']['topLevelComment']['snippet']
+                comment_df.append(data)
+
+        # Step 3 : Extrect Text and numeric information
+        comment_dic = []
+        comment_sentiment = []
+        for i in range(0, len(comment_df)):
+            dic = {'videoId': comment_df[i]['videoId'], 'likeCount': comment_df[i]['likeCount'],
+                   'publishedAt': comment_df[i]['publishedAt'], 'text': comment_df[i]['textOriginal']}
+            comment_dic.append(dic)
+
+            dic_title = {'publishedAt': comment_df[i]['publishedAt'], 'original_text': comment_df[i]['textOriginal']}
+            comment_sentiment.append(dic_title)
+            print(comment_sentiment[i])
+
+        for i in range(0, len(comment_sentiment)):
+            comment_sentiment[i]['publishedAt'] = datetime.strptime(comment_sentiment[i]['publishedAt'],
+                                                                    '%Y-%m-%dT%H:%M:%SZ')
+            comment_sentiment[i]['publishedAt'] = datetime.strftime(comment_sentiment[i]['publishedAt'], '%Y-%m-%d-%H')
+
+        # Step 4 : Converting dataframe
+        comment_sentiment = pd.DataFrame(comment_sentiment)
+
+        # Step 5 : Text preprocessing
+        ### Part 001 : Removal of Text
+        comment_sentiment["transformed_text"] = comment_sentiment["original_text"].apply(lambda x: remove_cleantext(x))
+
+        ### Part 002 : Removal of Emoji
+        comment_sentiment["transformed_text"] = comment_sentiment["transformed_text"].apply(lambda text: remove_emoji(text))
+
+        ### Part 003 : Removal of Emoticon
+        comment_sentiment["transformed_text"] = comment_sentiment["transformed_text"].apply(lambda text: remove_emoticons(text))
+
+        ### Part 004 : Removal of Freq/Rare
+        n_freq_words = freq
+        n_rare_words = rare
+
+        cnt = Counter()
+        for text in comment_sentiment["transformed_text"].values:
+            for word in text.split():
+                cnt[word] += 1
+
+        rem_frewords = set([w for (w, wc) in cnt.most_common(n_freq_words)])
+        rem_rare = set([w for (w, wc) in cnt.most_common()[:-n_rare_words - 1:-1]])
+
+        print(colored.fg('green'))
+        print('MESSAGE : Frequent words :', rem_frewords)
+        print('MESSAGE : Rare words :', rem_rare)
+        print(colored.fg('white'))
+
+        comment_sentiment["transformed_text"] = comment_sentiment["transformed_text"].apply(lambda text: remove_freqwords(text))
+        comment_sentiment["transformed_text"] = comment_sentiment["transformed_text"].apply(lambda text: remove_rarewords(text))
+
+        ### Part 005 : Tokenization and Stopwords
+        tokenizer = ToktokTokenizer()  # This tokenizer is for a better stopwords. Actual tokenization will be placed in sentiment score.
+        rem_stopwords = set(stopwords.words('english'))
+        comment_sentiment['stopword'] = comment_sentiment['transformed_text'].apply(remove_stopwords)
+
+        ### Part 006 : Lemmatization (I am not using stemming : https://www.kaggle.com/sudalairajkumar/getting-started-with-text-preprocessing)
+        lemmatizer = WordNetLemmatizer()
+        wordnet_map = {"N": wordnet.NOUN, "V": wordnet.VERB, "J": wordnet.ADJ, "R": wordnet.ADV}
+        comment_sentiment['stemming'] = comment_sentiment['transformed_text'].apply(
+            lambda text: lemmatize_words(text))
+
+        return comment_sentiment
+
 ################################################################################################################################################################################
+######## TEXT TYPE :
+api_credential = "AIzaSyAM1a_XGQnnLDyJ7oYmhJV8mBDRY7MDtxk"
+channel_id = "UCYtNSrfGdXooZYu_hkq18_w"
+
 ######## VIDEO LIST SETUP/BASIC :
-youtube = youtube("AIzaSyAM1a_XGQnnLDyJ7oYmhJV8mBDRY7MDtxk")
+youtube = youtube(api=api_credential)
+sentiment = sentiment(api=api_credential)
 ######## VIDEO LIST DETAIL :
 trendvideo_list = youtube.trend_video(2021, 5, 21, after_day=7, n_max=10, region='MY', language='en')
 popular_list = youtube.popular_video(n_max=20, region='MY')
 
-################################################################################################################################################################################
 ######## CHANNEL ANALYSIS SETUP/BASIC :
-summary = youtube.get_channel_stats('UCYtNSrfGdXooZYu_hkq18_w', sort='date') #UCx6jsZ02B4K3SECUrkgPyzg
+summary = youtube.get_channel_stats(channel_id=channel_id, sort='date') #UCx6jsZ02B4K3SECUrkgPyzg
 analysis = analysis(scaler=1)
 fbtotal, fbratio, likeratio, dislikeratio = analysis.setup()
+
 ######## CHANNEL ANALYSIS DETAIL :
 analysis.allchart()
 analysis.seasonal_plot()
 anomaly_date = analysis.anomaly(type='all', n_anomaly=2)
 
-################################################################################################################################################################################
-######## TEST PLACE :
-
-
+######## SENTIMENT ANALYSIS :
+sentiment = sentiment.preprocessing(freq=0, rare=10)
