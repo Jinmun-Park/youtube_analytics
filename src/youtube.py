@@ -12,10 +12,13 @@ https://stackoverflow.com/questions/26447191/how-to-add-trendline-in-python-matp
 '''
 # pip install google-api-python-client
 
+# youtube class
 from googleapiclient.discovery import build #API
 from datetime import datetime
 import pandas as pd
 import numpy as np
+
+# analysis class
 from matplotlib import pyplot as plt
 import matplotlib as mpl # Seasonal plot
 import matplotlib.gridspec as gridspec #Splitplot
@@ -449,7 +452,7 @@ class analysis:
             print("Second anomaly selected values :")
             print(anomaly_only['anomaly'].value_counts())
 
-            fig, ax = plt.subplots(figsize=(10, 6))
+            fig, ax = plt.subplots(figsize=(12, 8))
             a = anomaly_only.loc[anomaly_only['anomaly'] == -1, ['date', 'view']]  # anomaly
             ax.plot(anomaly_only['date'], anomaly_only['view'], color='blue', label='view')
             ax.scatter(a['date'], a['view'], color='red', label='Anomaly')
@@ -511,24 +514,25 @@ class analysis:
         anomaly_date = anomaly_only[['date']]
         return anomaly_date
 
+
 ################################################################################################################################################################################
+######## TEXT TYPE :
+api_credential = "AIzaSyAM1a_XGQnnLDyJ7oYmhJV8mBDRY7MDtxk"
+channel_id = "UCYtNSrfGdXooZYu_hkq18_w"
+
 ######## VIDEO LIST SETUP/BASIC :
-youtube = youtube("AIzaSyAM1a_XGQnnLDyJ7oYmhJV8mBDRY7MDtxk")
+youtube = youtube(api=api_credential)
+
 ######## VIDEO LIST DETAIL :
 trendvideo_list = youtube.trend_video(2021, 5, 21, after_day=7, n_max=10, region='MY', language='en')
 popular_list = youtube.popular_video(n_max=20, region='MY')
 
-################################################################################################################################################################################
 ######## CHANNEL ANALYSIS SETUP/BASIC :
-summary = youtube.get_channel_stats('UCYtNSrfGdXooZYu_hkq18_w', sort='date') #UCx6jsZ02B4K3SECUrkgPyzg
+summary = youtube.get_channel_stats(channel_id=channel_id, sort='date') #UCx6jsZ02B4K3SECUrkgPyzg
 analysis = analysis(scaler=1)
 fbtotal, fbratio, likeratio, dislikeratio = analysis.setup()
+
 ######## CHANNEL ANALYSIS DETAIL :
 analysis.allchart()
 analysis.seasonal_plot()
 anomaly_date = analysis.anomaly(type='all', n_anomaly=2)
-
-################################################################################################################################################################################
-######## TEST PLACE :
-
-
