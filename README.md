@@ -21,6 +21,7 @@ This is his youtube video : [ClarityCoders][ClarityCoders].
 ## How to use it
 I have designed function in three main parts : Getting channel ID, video dates are selected using anomaly detection and sentiment analysis.
 
+### Youtube API and find out your channel
 Please use `youtube` function to have a list of trend videos. 
 - `youtube.trendvideo(year, month, day, after_day, n_max, region, language)` This uses **search list** option to extract trend channels using date,region and language filters. 
 - `popular_video(n_max, region)` This uses **video list** option to extract the mostPopular videos using region filter.
@@ -31,11 +32,7 @@ Please use `youtube` function to have a list of trend videos.
 1. [regionCode][regionCode] 
 2. [relevanceLanguage][relevanceLanguage] 
 
-[GoogleAPI]:https://console.cloud.google.com/cloud-resource-manager
-[GoogleAPI_reference]:https://developers.google.com/youtube/v3/docs/?apix=true
-[ClarityCoders]:https://www.youtube.com/watch?v=2mSwcRb3KjQ&t=1030s&ab_channel=ClarityCodersClarityCoders
-[regionCode]: https://www.iso.org/iso-3166-country-codes.html
-[relevanceLanguage]: https://www.loc.gov/standards/iso639-2/php/code_list.php
+### Perform simple EDA on your selected youtube channel
 
 Please use `analysis` function to have visualization plots in your selected channel. 
 
@@ -48,4 +45,17 @@ analysis.seasonal_plot()
 anomaly_date = analysis.anomaly(type='all', n_anomaly=2)
 ```
 
+### Perform Sentiment analysis using Textblob and BERT
+```
+sentiment = sentiment(api=api_credential)
+comment_sentiment = sentiment.preprocessing(freq=0, rare=10)
+sentiment_analysis = sentiment.sentiment_analysis()
+```
 
+
+
+[GoogleAPI]:https://console.cloud.google.com/cloud-resource-manager
+[GoogleAPI_reference]:https://developers.google.com/youtube/v3/docs/?apix=true
+[ClarityCoders]:https://www.youtube.com/watch?v=2mSwcRb3KjQ&t=1030s&ab_channel=ClarityCodersClarityCoders
+[regionCode]: https://www.iso.org/iso-3166-country-codes.html
+[relevanceLanguage]: https://www.loc.gov/standards/iso639-2/php/code_list.php
